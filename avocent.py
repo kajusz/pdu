@@ -113,8 +113,9 @@ class simpleSnmp():
 class AvocentPDU():
     def __init__(self, ip):
         self.ip = ip
-        self.snmp = simpleSnmp(self.ip)
-        self.total = int(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets)) + 1
+        #self.snmp = simpleSnmp(self.ip)
+        self.snmp = simpleSnmp(self.ip, userName='tcap', authKey='tP6gB2vzUmfewDHGEL0D', privKey='vAdnuDA2cEKnDVKUKuYw', authProtocol=pysnmp.hlapi.usmHMACSHAAuthProtocol, privProtocol=pysnmp.hlapi.usmDESPrivProtocol, community=None)
+        self.total = int(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets))
 
 ### Invert
     def invert(self, status):
@@ -172,6 +173,10 @@ class AvocentPDU():
         log.info('set pmPowerMgmtOutletsTablePowerControl %d', outletId)
         return self.snmp.set(pmPowerMgmtOutletsTablePowerControl+(1,1,outletId,), int, pmPowerMgmtOutletsTablePowerControlIVal[status])
 
+    def setStatusAll(self, status):
+        for i in range(1,self.total+1):
+            self.setStatus(i, status)
+
 ### Current
     def getCurrent(self, outletId):
         log.info('get pmPowerMgmtOutletsTableCurrentValue %d', outletId)
@@ -184,7 +189,7 @@ class AvocentPDU():
 ### WHAT?
     def getOLS(self):
         ols = []
-        for i in range(1, self.total):
+        for i in range(1,self.total+1):
             ola = self.snmp.bulk([pmPowerMgmtOutletsTableName+(1,1,i), pmPowerMgmtOutletsTableStatus+(1,1,i)])
             ols.append((i, str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])]))
         return ols
@@ -196,7 +201,7 @@ class AvocentPDU():
 
     def getOLSC(self):
         ols = []
-        for i in range(1, self.total):
+        for i in range(1,self.total+1):
             ols.append((i,)+self.getLSC(i))
         return ols
 

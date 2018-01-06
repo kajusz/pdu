@@ -4,7 +4,8 @@ from flask import Flask, redirect, url_for
 app = Flask(__name__)
 
 #ips = ("192.168.254.51", "192.168.254.180", "192.168.254.220",)
-ips = ('172.21.1.140',)
+#ips = ('172.21.1.140',)
+ips = ('192.168.8.131',)
 
 from avocent import AvocentPDU, simpleSnmp
 
