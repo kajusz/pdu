@@ -113,8 +113,8 @@ class simpleSnmp():
 class AvocentPDU():
     def __init__(self, ip):
         self.ip = ip
-        #self.snmp = simpleSnmp(self.ip)
-        self.snmp = simpleSnmp(self.ip, userName='tcap', authKey='tP6gB2vzUmfewDHGEL0D', privKey='vAdnuDA2cEKnDVKUKuYw', authProtocol=pysnmp.hlapi.usmHMACSHAAuthProtocol, privProtocol=pysnmp.hlapi.usmDESPrivProtocol, community=None)
+        self.snmp = simpleSnmp(self.ip)
+        #self.snmp = simpleSnmp(self.ip, userName='tcap', authKey='tP6gB2vzUmfewDHGEL0D', privKey='vAdnuDA2cEKnDVKUKuYw', authProtocol=pysnmp.hlapi.usmHMACSHAAuthProtocol, privProtocol=pysnmp.hlapi.usmDESPrivProtocol, community=None)
         self.total = int(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets))
 
 ### Invert
@@ -124,6 +124,8 @@ class AvocentPDU():
             action = 'off'
         elif status == 'off':
             action = 'on'
+        else:
+            action = 'off'
         return action
 
 ### Name
@@ -149,6 +151,7 @@ class AvocentPDU():
 
 ### Label
     def getLabel(self, outletId):
+        assert(outletId <= self.total)
         log.info('get pmPowerMgmtOutletsTableName %d', outletId)
         return str(self.snmp.get(pmPowerMgmtOutletsTableName+(1,1,outletId,)))
 
@@ -157,11 +160,14 @@ class AvocentPDU():
         return self.snmp.next(pmPowerMgmtOutletsTableName)
 
     def setLabel(self, outletId, text):
+        assert(outletId <= self.total)
+		## TODO: Check string is ascii
         log.info('set pmPowerMgmtOutletsTableName %d', outletId)
         return self.snmp.set(pmPowerMgmtOutletsTableName+(1,1,outletId,), str, text)
 
 ### Status
     def getStatus(self, outletId):
+        assert(outletId <= self.total)
         log.info('get pmPowerMgmtOutletsTableStatus %d', outletId)
         return pmPowerMgmtOutletsTableStatusVal[str(self.snmp.get(pmPowerMgmtOutletsTableStatus+(1,1,outletId,)))]
 
@@ -170,15 +176,19 @@ class AvocentPDU():
         return self.snmp.next(pmPowerMgmtOutletsTableStatus)
 
     def setStatus(self, outletId, status):
+        assert(outletId <= self.total)
+        assert(status == 'on' or status == 'off')
         log.info('set pmPowerMgmtOutletsTablePowerControl %d', outletId)
         return self.snmp.set(pmPowerMgmtOutletsTablePowerControl+(1,1,outletId,), int, pmPowerMgmtOutletsTablePowerControlIVal[status])
 
     def setStatusAll(self, status):
+        assert(status == 'on' or status == 'off')
         for i in range(1,self.total+1):
             self.setStatus(i, status)
 
 ### Current
     def getCurrent(self, outletId):
+        assert(outletId <= self.total)
         log.info('get pmPowerMgmtOutletsTableCurrentValue %d', outletId)
         return float(self.snmp.get(pmPowerMgmtOutletsTableCurrentValue+(1,1,outletId,)))/10
 
@@ -187,17 +197,21 @@ class AvocentPDU():
         return self.snmp.next(pmPowerMgmtOutletsTableCurrentValue)
 
 ### WHAT?
+    def getLS(self, outletId):
+        assert(outletId <= self.total)
+        ola = self.snmp.bulk([pmPowerMgmtOutletsTableName+(1,1,outletId), pmPowerMgmtOutletsTableStatus+(1,1,outletId)])
+        return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])])
+
+    def getLSC(self, outletId):
+        assert(outletId <= self.total)
+        ola = self.snmp.bulk([pmPowerMgmtOutletsTableName+(1,1,outletId), pmPowerMgmtOutletsTableStatus+(1,1,outletId), pmPowerMgmtOutletsTableCurrentValue+(1,1,outletId)])
+        return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])], float(ola[2][1])/10)
+
     def getOLS(self):
         ols = []
         for i in range(1,self.total+1):
-            ola = self.snmp.bulk([pmPowerMgmtOutletsTableName+(1,1,i), pmPowerMgmtOutletsTableStatus+(1,1,i)])
-            ols.append((i, str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])]))
+            ols.append((i,)+self.getLS(i))
         return ols
-
-    def getLSC(self, outletId):
-        i = outletId
-        ola = self.snmp.bulk([pmPowerMgmtOutletsTableName+(1,1,i), pmPowerMgmtOutletsTableStatus+(1,1,i), pmPowerMgmtOutletsTableCurrentValue+(1,1,i)])
-        return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])], float(ola[2][1])/10)
 
     def getOLSC(self):
         ols = []
