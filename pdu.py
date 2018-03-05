@@ -6,7 +6,7 @@ app = Flask(__name__)
 # Define your pdus here
 ips = ('192.168.8.131',)
 
-from avocent import AvocentPDU, simpleSnmp
+from avocent import AvocentPDU
 
 pdus = []
 for i in ips:
