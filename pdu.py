@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import Flask, redirect, url_for
+from flask import Flask, request, redirect, url_for
 app = Flask(__name__)
 
 # Define your pdus here
@@ -26,10 +26,11 @@ def mainPage():
 
         olsc = pdus[i].getOLSC()
         for outlet, label, status, current in olsc:
-            if status == 'on':
+            if pdus[i].currentPerOutlet and status == 'on':
                 buf2 += '<li>%s is <span class="on">on</span> drawing %.1fA, <a href="/pdu%d/set/%d/off">power off</a></li>' % (label, current, i, outlet)
-            elif status == 'off':
-                buf2 += '<li>%s is <span class="off">off</span>, <a href="/pdu%d/set/%d/on">power on</a></li>' % (label, i, outlet)
+            else:
+                invStatus = pdus[i].invert(status)
+                buf2 += '<li>%s is <span class="%s">%s</span>, <a href="/pdu%d/set/%d/%s">power %s</a></li>' % (label, status, status, i, outlet, invStatus, invStatus)
 
         buf += buf2 + '</ol></div>'
 
@@ -48,19 +49,16 @@ def handlePduSetLabel(pduId, outlet, label):
 
 @app.route('/pdu<int:pduId>/set/<int:outlet>/<string:status>')
 def handlePduSetStatus(pduId, outlet, status):
-    assert(status == 'on' or status == 'off')
     pdus[pduId].setStatus(outlet, status)
     return redirect(request.referrer)
 
 @app.route('/pdu<int:pduId>/set/all/<string:status>')
 def handlePduSetStatusAll(pduId, status):
-    assert(status == 'on' or status == 'off')
     pdus[pduId].setStatusAll(status)
     return redirect(request.referrer)
 
 @app.route('/pdu<int:pduId>/set/range/<int:start>/<int:end>/<string:status>')
 def handlePduSetStatusRange(pduId, start, end, status):
-    assert(status == 'on' or status == 'off')
     assert(start < end)
     for outlet in range(start, end+1):
         pdus[pduId].setStatus(outlet, status)

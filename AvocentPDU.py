@@ -4,24 +4,27 @@ import simplesnmp
 import pysnmp.hlapi
 
 SNMPv2SMIenterprises                    = (1,3,6,1,4,1,)
+Avocent                                 = SNMPv2SMIenterprises+(10418,17,2,5) # Avocent + pm + pmManagement + pmPowerMgmt
 
-pmPowerMgmtSerialTableSave              = SNMPv2SMIenterprises+(10418,17,2,5,2,1,20,1,)
+pmPowerMgmtSerialTableSave              = Avocent+(2,1,20,1,)
 
-pmPowerMgmtPDUTablePduId                = SNMPv2SMIenterprises+(10418,17,2,5,3,1,3,1,1,)
-pmPowerMgmtPDUTableCurrentValue         = SNMPv2SMIenterprises+(10418,17,2,5,3,1,50,1,1,)
-pmPowerMgmtPDUTablePowerValue           = SNMPv2SMIenterprises+(10418,17,2,5,3,1,60,1,1,)
-pmPowerMgmtPDUTableVoltageValue         = SNMPv2SMIenterprises+(10418,17,2,5,3,1,70,1,1,)
+pmPowerMgmtPDUTablePduId                = Avocent+(3,1,3,1,1,)
+pmPowerMgmtPDUTableCurrentValue         = Avocent+(3,1,50,1,1,)
+pmPowerMgmtPDUTablePowerValue           = Avocent+(3,1,60,1,1,)
+pmPowerMgmtPDUTableVoltageValue         = Avocent+(3,1,70,1,1,)
 
-pmPowerMgmtTotalNumberOfOutlets         = SNMPv2SMIenterprises+(10418,17,2,5,4,0,)
+pmPowerMgmtTotalNumberOfOutlets         = Avocent+(4,0,)
 
-pmPowerMgmtOutletsTableName             = SNMPv2SMIenterprises+(10418,17,2,5,5,1,4,)
-pmPowerMgmtOutletsTableStatus           = SNMPv2SMIenterprises+(10418,17,2,5,5,1,5,)
-pmPowerMgmtOutletsTablePowerControl     = SNMPv2SMIenterprises+(10418,17,2,5,5,1,6,)
-pmPowerMgmtOutletsTableCurrentValue     = SNMPv2SMIenterprises+(10418,17,2,5,5,1,50,)
+pmPowerMgmtOutletsTableName             = Avocent+(5,1,4,)
+pmPowerMgmtOutletsTableStatus           = Avocent+(5,1,5,)
+pmPowerMgmtOutletsTablePowerControl     = Avocent+(5,1,6,)
+pmPowerMgmtOutletsTableCurrentValue     = Avocent+(5,1,50,)
 
-pmPowerMgmtOutletsTableStatusVal        = {'1':'off', '2':'on', '3':'offLocked', '4':'onLocked', '5':'offCycle', '6':'onPendingOff', '7':'offPendingOn', '8':'onPendingCycle', '9':'notSet', '10':'onFixed', '11':'offShutdown', '12':'tripped'}
-pmPowerMgmtOutletsTablePowerControlVal  = {'1':'noAction', '2':'powerOn', '3':'powerOff', '4':'powerCycle', '5':'powerLock', '6':'powerUnlock'}
-pmPowerMgmtOutletsTablePowerControlIVal = {'on':2, 'off':3}
+pmPowerMgmtOutletsTableStatusVal        = {'1':'off', '2':'on', '3':'offLocked', '4':'onLocked', '5':'offCycle', '6':'onPendingOff', '7':'offPendingOn', '8':'onPendingCycle', '9':'notSet', '10':'onFixed', '11':'offShutdown', '12':'tripped', }
+pmPowerMgmtOutletsTablePowerControlVal  = {'1':'noAction', '2':'powerOn', '3':'powerOff', '4':'powerCycle', '5':'powerLock', '6':'powerUnlock', }
+pmPowerMgmtOutletsTablePowerControlIVal = {'on':2, 'off':3, 'reboot':4, }
+
+pmPowerMgmtOutletsTableValidValues      = ['on', 'off', 'reboot']
 
 import logging
 log = logging.getLogger(__name__)
@@ -53,6 +56,7 @@ class AvocentPDU():
         self.snmp = simplesnmp.simpleSnmp(self.ip, userName=user, authKey=authKey, privKey=privKey, authProtocol=authProtocol, privProtocol=privProtocol)
         log.debug('%s get pmPowerMgmtTotalNumberOfOutlets', self.ip)
         self.total = int(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets))
+        self.currentPerOutlet = True
 
 ### Invert
     def invert(self, status):
@@ -115,12 +119,12 @@ class AvocentPDU():
 
     def setStatus(self, outletId, status):
         assert(outletId <= self.total)
-        assert(status == 'on' or status == 'off')
+        assert(status in pmPowerMgmtOutletsTableValidValues)
         log.debug('%s set pmPowerMgmtOutletsTablePowerControl %d', self.ip, outletId)
         return self.snmp.set(pmPowerMgmtOutletsTablePowerControl+(1,1,outletId,), int, pmPowerMgmtOutletsTablePowerControlIVal[status])
 
     def setStatusAll(self, status):
-        assert(status == 'on' or status == 'off')
+        assert(status in pmPowerMgmtOutletsTableValidValues)
         for i in range(1,self.total+1):
             self.setStatus(i, status)
 
@@ -134,7 +138,7 @@ class AvocentPDU():
         log.debug('%s next pmPowerMgmtOutletsTableCurrentValue', self.ip)
         return self.snmp.next(pmPowerMgmtOutletsTableCurrentValue)
 
-### WHAT?
+### Many params
     def getLS(self, outletId):
         assert(outletId <= self.total)
         log.debug('%s many pmPowerMgmtOutletsTable[Name, Status]', self.ip)
@@ -162,40 +166,3 @@ class AvocentPDU():
         for i in range(0, self.total*3, 3):
             ols.append((int(i/3), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])], float(olsc[i+2][1])))
         return ols
-
-    def test(self):
-
-        #([pmPowerMgmtOutletsTableName+(1,), pmPowerMgmtOutletsTableStatus+(1,), pmPowerMgmtOutletsTableCurrentValue+(1,)])
-
-#        thing = [rfc1902.ObjectIdentifier(pmPowerMgmtPDUTablePduId), rfc1902.ObjectIdentifier(pmPowerMgmtPDUTableCurrentValue), rfc1902.ObjectIdentifier(pmPowerMgmtPDUTablePowerValue), rfc1902.ObjectIdentifier(pmPowerMgmtPDUTableVoltageValue)]
-        import time
-        start = time.time()
-        olsc = self.getOLSC()
-        for outlet, label, status, current in olsc:
-            print(outlet, label, status, current)
-        end = time.time()
-        print(end - start)
-
-        start = time.time()
-        log.debug('%s bulk pmPowerMgmtOutletsTableName', self.ip)
-        on = self.snmp.bulk(pmPowerMgmtOutletsTableName, self.total)
-        log.debug('%s bulk pmPowerMgmtOutletsTableStatus', self.ip)
-        os = self.snmp.bulk(pmPowerMgmtOutletsTableStatus, self.total)
-        log.debug('%s bulk pmPowerMgmtOutletsTableCurrentValue', self.ip)
-        oc = self.snmp.bulk(pmPowerMgmtOutletsTableCurrentValue, self.total)
-
-        ols = []
-        for i in range(0,self.total):
-            ols.append((i+1, on[i][1], os[i][1], oc[i][1]))
-        end = time.time()
-
-        print(end - start)
-#        return ols
-
-
-        #print(olsc)
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    pdu = AvocentPDU('192.168.254.51', user='tcap', auth='authPriv', key=('2KtsuaRKWWh1ip28X5RP', '6oYtL64RI9HqPoN99spn'))
-    pdu.test()
