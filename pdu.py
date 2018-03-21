@@ -4,20 +4,25 @@ from flask import Flask, redirect, url_for
 app = Flask(__name__)
 
 # Define your pdus here
-ips = ('192.168.8.131',)
+myPduConfig = (
+    {'module':'AvocentPDU', 'ip':'192.168.0.1', 'user':'psuSnmp', 'auth':'authPriv', 'key':('1234567890abcdefghij', 'klmnopqrstuvwxyz1234'),},
+    {'module':'ApcPDU', 'ip':'192.168.0.2', 'user':None, 'auth':None, 'key':None,},
+)
 
-from avocent import AvocentPDU
+import importlib
 
 pdus = []
-for i in ips:
-    pdus.append(AvocentPDU(i))
+for pduDetails in myPduConfig:
+    module = importlib.import_module(pduDetails['module'])
+    pdu = getattr(module, pduDetails['module'])
+    pdus.append(pdu(pduDetails['ip'], user=pduDetails['user'], auth=pduDetails['auth'], key=pduDetails['key']))
 
 @app.route('/')
 def mainPage():
     buf = '<DOCTYPE html><html><head><title>Advanced Power Distribution Management</title><style type="text/css"> span.on, span.off {font-weight:bold;} .on {color:green;} .off {color:red;}</style></head><body><h1>Advanced Power Distribution Management</h1><p>Lets turn things on and off!</p><ul>'
     for i in range(0, len(pdus)):
         ncvp  = pdus[i].getNCVP()
-        buf2 = '<div><p>name = %s | current = %.1fA | voltage = %dV | power = %.1fW | <a href="/pdu%d/set/all/on">all <span class="on">on</span></a> | <a href="/pdu%d/set/all/off">all <span class="off">off</span></a></p><ol>' % (*ncvp, i, i)
+        buf2 = '<div><p>name = %s | current = %.1fA | voltage = %dV | power = %.1fW | <a href="/pdu%d/save">Save</a> | <a href="/pdu%d/set/all/on">all <span class="on">on</span></a> | <a href="/pdu%d/set/all/off">all <span class="off">off</span></a></p><ol>' % (*ncvp, i, i, i)
 
         olsc = pdus[i].getOLSC()
         for outlet, label, status, current in olsc:
@@ -30,6 +35,11 @@ def mainPage():
 
     buf += '</ul></body></html>'
     return buf
+
+@app.route('/pdu<int:pduId>/save')
+def handlePduSave(pduId):
+    pdus[pduId].save()
+    return redirect(request.referrer)
 
 @app.route('/pdu<int:pduId>/label/<int:outlet>/<string:label>')
 def handlePduSetLabel(pduId, outlet, label):
