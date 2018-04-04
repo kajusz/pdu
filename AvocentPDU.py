@@ -57,6 +57,7 @@ class AvocentPDU():
         log.debug('%s get pmPowerMgmtTotalNumberOfOutlets', self.ip)
         self.total = int(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets))
         self.currentPerOutlet = True
+        self.numberingStart = 1
 
 ### Invert
     def invert(self, status):
@@ -156,7 +157,7 @@ class AvocentPDU():
         log.debug('%s bulk pmPowerMgmtOutletsTable[Name, Status]', self.ip)
         olsc = self.snmp.bulk([pmPowerMgmtOutletsTableName, pmPowerMgmtOutletsTableStatus], self.total)
         for i in range(0, self.total*2, 2):
-            ols.append((int(i/2), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])]))
+            ols.append((int(1+i/2), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])]))
         return ols
 
     def getOLSC(self):
@@ -164,5 +165,5 @@ class AvocentPDU():
         log.debug('%s bulk pmPowerMgmtOutletsTable[Name, Status, CurrentValue]', self.ip)
         olsc = self.snmp.bulk([pmPowerMgmtOutletsTableName, pmPowerMgmtOutletsTableStatus, pmPowerMgmtOutletsTableCurrentValue], self.total)
         for i in range(0, self.total*3, 3):
-            ols.append((int(i/3), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])], float(olsc[i+2][1])))
+            ols.append((int(1+i/3), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])], float(olsc[i+2][1])))
         return ols

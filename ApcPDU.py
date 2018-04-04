@@ -57,6 +57,7 @@ class ApcPDU():
         log.debug('%s get sPDUOutletControlTableSize', self.ip)
         self.total = int(self.snmp.get(sPDUOutletControlTableSize))
         self.currentPerOutlet = False
+        self.numberingStart = 1
 
 ### Invert
     def invert(self, status):
@@ -89,8 +90,8 @@ class ApcPDU():
 ### Label
     def getLabel(self, outletId):
         assert(outletId <= self.total)
-        log.debug('%s get sPDUOutletName %d', self.ip, outletId+1)
-        return str(self.snmp.get(sPDUOutletName+(outletId+1,)))
+        log.debug('%s get sPDUOutletName %d', self.ip, outletId)
+        return str(self.snmp.get(sPDUOutletName+(outletId,)))
 
     def getLabelsAll(self):
         log.debug('%s next sPDUOutletName', self.ip)
@@ -99,14 +100,14 @@ class ApcPDU():
     def setLabel(self, outletId, text):
         assert(outletId <= self.total)
         assert(len(text) <= 20)
-        log.debug('%s set sPDUOutletName %d', self.ip, outletId+1)
-        return self.snmp.set(sPDUOutletName+(outletId+1,), str, text)
+        log.debug('%s set sPDUOutletName %d', self.ip, outletId)
+        return self.snmp.set(sPDUOutletName+(outletId,), str, text)
 
 ### Status
     def getStatus(self, outletId):
         assert(outletId <= self.total)
-        log.debug('%s get sPDUOutletCtl %d', self.ip, outletId+1)
-        return sPDUOutletCtlVal[str(self.snmp.get(sPDUOutletCtl+(outletId+1,)))]
+        log.debug('%s get sPDUOutletCtl %d', self.ip, outletId)
+        return sPDUOutletCtlVal[str(self.snmp.get(sPDUOutletCtl+(outletId,)))]
 
     def getStatusAll(self):
         log.debug('%s next sPDUOutletCtl', self.ip)
@@ -115,8 +116,8 @@ class ApcPDU():
     def setStatus(self, outletId, status):
         assert(outletId <= self.total)
         assert(status in sPDUCtlValidValues)
-        log.debug('%s set sPDUOutletCtl %d %s %d', self.ip, outletId+1, status, sPDUOutletCtlIVal[status])
-        return self.snmp.set(sPDUOutletCtl+(outletId+1,), int, sPDUOutletCtlIVal[status])
+        log.debug('%s set sPDUOutletCtl %d %s %d', self.ip, outletId, status, sPDUOutletCtlIVal[status])
+        return self.snmp.set(sPDUOutletCtl+(outletId,), int, sPDUOutletCtlIVal[status])
 
     def setStatusAll(self, status):
         assert(status in sPDUCtlValidValues)
@@ -126,8 +127,8 @@ class ApcPDU():
 ### Many params
     def getLS(self, outletId):
         assert(outletId <= self.total)
-        log.debug('%s many sPDUOutlet[Name, Ctl] %d', self.ip, outletId+1)
-        ola = self.snmp.many([sPDUOutletName+(outletId+1), sPDUOutletCtl+(outletId+1)])
+        log.debug('%s many sPDUOutlet[Name, Ctl] %d', self.ip, outletId)
+        ola = self.snmp.many([sPDUOutletName+(outletId), sPDUOutletCtl+(outletId)])
         return (str(ola[0][1]), sPDUOutletCtlVal[str(ola[1][1])])
 
     def getLSC(self, outletId):
@@ -138,7 +139,7 @@ class ApcPDU():
         log.debug('%s bulk sPDUOutlet[Name, Ctl]', self.ip)
         olsc = self.snmp.bulk([sPDUOutletName, sPDUOutletCtl], self.total)
         for i in range(0, self.total*2, 2):
-            ols.append((int(i/2), str(olsc[i][1]), sPDUOutletCtlVal[str(olsc[i+1][1])]))
+            ols.append((int(1+i/2), str(olsc[i][1]), sPDUOutletCtlVal[str(olsc[i+1][1])]))
         return ols
 
     def getOLSC(self):
@@ -146,5 +147,5 @@ class ApcPDU():
         log.debug('%s bulk sPDUOutlet[Name, Ctl]', self.ip)
         olsc = self.snmp.bulk([sPDUOutletName, sPDUOutletCtl], self.total)
         for i in range(0, self.total*2, 2):
-            ols.append((int(i/2), str(olsc[i][1]), sPDUOutletCtlVal[str(olsc[i+1][1])], 0))
+            ols.append((int(1+i/2), str(olsc[i][1]), sPDUOutletCtlVal[str(olsc[i+1][1])], 0))
         return ols
