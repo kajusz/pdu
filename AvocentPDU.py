@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
-import simplesnmp
+try:
+    import simplesnmp
+except ImportError:
+    import pdu.simplesnmp as simplesnmp
+
 import pysnmp.hlapi
 
 SNMPv2SMIenterprises                    = (1,3,6,1,4,1,)
