@@ -13,6 +13,7 @@ Avocent                                 = SNMPv2SMIenterprises+(10418,17,2,5) # 
 pmPowerMgmtSerialTableSave              = Avocent+(2,1,20,1,)
 
 pmPowerMgmtPDUTablePduId                = Avocent+(3,1,3,1,1,)
+pmPowerMgmtPDUTableAlarm                = Avocent+(3,1,45,1,1)
 pmPowerMgmtPDUTableCurrentValue         = Avocent+(3,1,50,1,1,)
 pmPowerMgmtPDUTablePowerValue           = Avocent+(3,1,60,1,1,)
 pmPowerMgmtPDUTableVoltageValue         = Avocent+(3,1,70,1,1,)
@@ -28,7 +29,28 @@ pmPowerMgmtOutletsTableStatusVal        = {'1':'off', '2':'on', '3':'offLocked',
 pmPowerMgmtOutletsTablePowerControlVal  = {'1':'noAction', '2':'powerOn', '3':'powerOff', '4':'powerCycle', '5':'powerLock', '6':'powerUnlock', }
 pmPowerMgmtOutletsTablePowerControlIVal = {'on':2, 'off':3, 'reboot':4, }
 
+pmPowerMgmtPDUTableAlarmVal = {'1':'normal', '2':'blow-fuse', '3':'hw-ocp', '4':'high-critical', '5':'high-warning', '6':'low-warning', '7':'low-critical'}
+
 pmPowerMgmtOutletsTableValidValues      = ['on', 'off', 'reboot']
+
+def safecastInt(value, default=None):
+    ret = None
+    try:
+        ret = int(value)
+    except (ValueError, TypeError):
+        ret = default
+    finally:
+        return ret
+
+def safecastFloat(value, default=None):
+    ret = None
+    try:
+        ret = float(value)
+    except (ValueError, TypeError):
+        ret = default
+    finally:
+        return ret
+
 
 import logging
 log = logging.getLogger(__name__)
@@ -58,8 +80,18 @@ class AvocentPDU():
             privProtocol=pysnmp.hlapi.usmNoPrivProtocol
 
         self.snmp = simplesnmp.simpleSnmp(self.ip, userName=user, authKey=authKey, privKey=privKey, authProtocol=authProtocol, privProtocol=privProtocol)
+
+        try:
+            log.debug('%s get pmPowerMgmtPDUTableAlarm', self.ip)
+            alarm = self.snmp.get(pmPowerMgmtPDUTableAlarm)
+            if (alarm != 1):
+                log.error('%s has alarm %d = %s', self.ip, alarm, pmPowerMgmtPDUTableAlarmVal[str(alarm)])
+        except:
+            log.error('%s failed to connect to %s', self.ip, self.ip)
+
         log.debug('%s get pmPowerMgmtTotalNumberOfOutlets', self.ip)
-        self.total = int(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets))
+        self.total = safecastInt(self.snmp.get(pmPowerMgmtTotalNumberOfOutlets), 0)
+
         self.currentPerOutlet = True
         self.numberingStart = 1
 
@@ -84,18 +116,32 @@ class AvocentPDU():
         log.debug('%s set pmPowerMgmtSerialTableSave 2', self.ip)
         return self.snmp.set(pmPowerMgmtSerialTableSave, int, 2)
 
+### Name, Status, Current, Voltage, Power
+    def getNSCVP(self):
+        log.debug('%s many pmPowerMgmtPDUTable[PduId, Alarm, CurrentValue, VoltageValue, PowerValue]', self.ip)
+        q = self.snmp.many([pmPowerMgmtPDUTablePduId, pmPowerMgmtPDUTableAlarm, pmPowerMgmtPDUTableCurrentValue, pmPowerMgmtPDUTableVoltageValue, pmPowerMgmtPDUTablePowerValue])
+        if q:
+            return (str(q[0][1]), pmPowerMgmtPDUTableAlarmVal[str(q[1][1])], safecastFloat(q[2][1], -10.0)/10, safecastInt(q[3][1], -1), safecastFloat(q[4][1], -10.0)/10)
+        else:
+            return None
+
 ### Name, Current, Voltage, Power
     def getNCVP(self):
         log.debug('%s many pmPowerMgmtPDUTable[PduId, CurrentValue, VoltageValue, PowerValue]', self.ip)
         q = self.snmp.many([pmPowerMgmtPDUTablePduId, pmPowerMgmtPDUTableCurrentValue, pmPowerMgmtPDUTableVoltageValue, pmPowerMgmtPDUTablePowerValue])
-        return (str(q[0][1]), float(q[1][1])/10, int(q[2][1]), float(q[3][1])/10)
+        if q:
+            return (str(q[0][1]), safecastFloat(q[1][1], -10.0)/10, safecastInt(q[2][1], -1), safecastFloat(q[3][1], -10.0)/10)
+        else:
+            return None
 
 ### Current, Voltage, Power
     def getCVP(self):
         log.debug('%s many pmPowerMgmtPDUTable[CurrentValue, VoltageValue, PowerValue]', self.ip)
         q = self.snmp.many([pmPowerMgmtPDUTableCurrentValue, pmPowerMgmtPDUTableVoltageValue, pmPowerMgmtPDUTablePowerValue])
-        return (float(q[0][1])/10, int(q[1][1]), float(q[2][1])/10)
-
+        if q:
+            return (safecastFloat(q[0][1], -10.0)/10, safecastInt(q[1][1], -1), safecastFloat(q[2][1], -10.0)/10)
+        else:
+            return None
 ### Label
     def getLabel(self, outletId):
         assert(outletId <= self.total)
@@ -137,7 +183,7 @@ class AvocentPDU():
     def getCurrent(self, outletId):
         assert(outletId <= self.total)
         log.debug('%s get pmPowerMgmtOutletsTableCurrentValue %d', self.ip, outletId)
-        return float(self.snmp.get(pmPowerMgmtOutletsTableCurrentValue+(1,1,outletId,)))/10
+        return safecastFloat(self.snmp.get(pmPowerMgmtOutletsTableCurrentValue+(1,1,outletId,)), -1.0)/10
 
     def getCurrentAll(self):
         log.debug('%s next pmPowerMgmtOutletsTableCurrentValue', self.ip)
@@ -148,26 +194,38 @@ class AvocentPDU():
         assert(outletId <= self.total)
         log.debug('%s many pmPowerMgmtOutletsTable[Name, Status]', self.ip)
         ola = self.snmp.many([pmPowerMgmtOutletsTableName+(1,1,outletId), pmPowerMgmtOutletsTableStatus+(1,1,outletId)])
-        return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])])
+        if ola:
+            return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])])
+        else:
+            return None
 
     def getLSC(self, outletId):
         assert(outletId <= self.total)
         log.debug('%s many pmPowerMgmtOutletsTable[Name, Status, CurrentValue]', self.ip)
         ola = self.snmp.many([pmPowerMgmtOutletsTableName+(1,1,outletId), pmPowerMgmtOutletsTableStatus+(1,1,outletId), pmPowerMgmtOutletsTableCurrentValue+(1,1,outletId)])
-        return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])], float(ola[2][1])/10)
+        if ola:
+            return (str(ola[0][1]), pmPowerMgmtOutletsTableStatusVal[str(ola[1][1])], safecastFloat(ola[2][1], -1.0)/10)
+        else:
+            return None
 
     def getOLS(self):
         ols = []
         log.debug('%s bulk pmPowerMgmtOutletsTable[Name, Status]', self.ip)
         olsc = self.snmp.bulk([pmPowerMgmtOutletsTableName, pmPowerMgmtOutletsTableStatus], self.total)
-        for i in range(0, self.total*2, 2):
-            ols.append((int(1+i/2), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])]))
-        return ols
+        if olsc:
+            for i in range(0, self.total*2, 2):
+                ols.append((int(1+i/2), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])]))
+            return ols
+        else:
+            return None
 
     def getOLSC(self):
         ols = []
         log.debug('%s bulk pmPowerMgmtOutletsTable[Name, Status, CurrentValue]', self.ip)
         olsc = self.snmp.bulk([pmPowerMgmtOutletsTableName, pmPowerMgmtOutletsTableStatus, pmPowerMgmtOutletsTableCurrentValue], self.total)
-        for i in range(0, self.total*3, 3):
-            ols.append((int(1+i/3), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])], float(olsc[i+2][1])))
-        return ols
+        if olsc:
+            for i in range(0, self.total*3, 3):
+                ols.append((int(1+i/3), str(olsc[i][1]), pmPowerMgmtOutletsTableStatusVal[str(olsc[i+1][1])], safecastFloat(olsc[i+2][1], -1.0)/10))
+            return ols
+        else:
+            return None
